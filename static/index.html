@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Literacy Trainer</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<header class="app-header">
+  <h1>Literacy Trainer</h1>
+  <div class="right">
+    <span id="paperTitle" class="paper-title"></span>
+    <span id="sessionCodeBadge" class="session-code-badge hidden"></span>
+    <span id="wsStatus" class="ws-status hidden"><span class="ws-dot"></span><span class="ws-label">disconnected</span></span>
+    <button id="btnTranscript" class="secondary hidden">Transcript</button>
+    <button id="btnSettings" class="secondary">Settings</button>
+    <button id="btnEnd" class="danger hidden">End Session</button>
+  </div>
+</header>
+
+<!-- =================== SETUP SCREEN =================== -->
+<section id="setupScreen" class="setup-wrap">
+
+  <div class="card">
+    <h2>1. Mode</h2>
+    <div class="field">
+      <label>Session type</label>
+      <select id="mode">
+        <option value="server" selected>Group session (server-backed, multi-user, transcripts saved)</option>
+        <option value="join">Join an existing group session by code</option>
+        <option value="webllm">Solo offline (WebLLM, runs entirely in browser)</option>
+      </select>
+      <div class="hint">
+        <b>Group session</b> creates a new session and gives you an 8-character code others can join. Anthropic API calls go through this server, so no learner needs an API key.<br>
+        <b>Join</b> connects you to an existing session; type the code below.<br>
+        <b>Solo offline</b> downloads a small model into your browser (~2&nbsp;GB first run) and runs everything locally — no server, no transcripts saved, single user.
+      </div>
+    </div>
+
+    <div id="joinFields" class="hidden">
+      <div class="field">
+        <label>Session code</label>
+        <input id="joinCode" type="text" placeholder="e.g. ABCD2345" autocapitalize="characters" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Your display name (shown to other learners + the Professor)</label>
+      <input id="learnerName" type="text" placeholder="e.g. Alex" />
+    </div>
+  </div>
+
+  <div id="serverConfigCard" class="card">
+    <h2>2. Article &amp; level</h2>
+
+    <div class="field">
+      <label>Learner level (informs the Professor's tone &amp; depth)</label>
+      <select id="learnerLevel">
+        <option value="undergraduate" selected>Undergraduate</option>
+        <option value="masters">Master's / early graduate</option>
+        <option value="phd">PhD / advanced</option>
+        <option value="professional">Professional / clinical</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Claude model</label>
+      <select id="model"></select>
+      <div class="hint">Model runs on the server using a single shared API key.</div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="paste">Paste text</button>
+      <button class="tab" data-tab="pdf">PDF upload</button>
+      <button class="tab" data-tab="url">From web URL</button>
+    </div>
+
+    <div class="tab-panel active" data-tab="paste">
+      <div class="field">
+        <label>Article title (optional)</label>
+        <input id="pasteTitle" type="text" placeholder="e.g., Smith et al., 2023 — Effects of X on Y" />
+      </div>
+      <div class="field">
+        <label>Paste full article text</label>
+        <textarea id="pasteText" rows="10" placeholder="Paste the article body here..."></textarea>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-tab="pdf">
+      <div class="field">
+        <label>Upload a PDF (parsed on the server)</label>
+        <input id="pdfFile" type="file" accept="application/pdf" />
+        <div id="pdfStatus" class="hint"></div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-tab="url">
+      <div class="field">
+        <label>Article URL</label>
+        <input id="urlInput" type="url" placeholder="https://..." />
+        <div class="hint">Many publisher sites block direct browser fetches (CORS). If the fetch fails, copy the text and use the Paste tab.</div>
+      </div>
+      <button id="urlFetchBtn" class="secondary">Fetch article</button>
+      <div id="urlStatus" class="hint"></div>
+    </div>
+  </div>
+
+  <!-- WebLLM-only fields (hidden unless mode=webllm) -->
+  <div id="webllmConfigCard" class="card hidden">
+    <h2>WebLLM model</h2>
+    <div class="field">
+      <label>Local model</label>
+      <select id="webllmModel">
+        <option value="Llama-3.2-3B-Instruct-q4f16_1-MLC" selected>Llama 3.2 3B Instruct — small &amp; fast (~1.9 GB)</option>
+        <option value="Phi-3.5-mini-instruct-q4f16_1-MLC">Phi 3.5 Mini Instruct — small &amp; fast (~2.3 GB)</option>
+        <option value="Llama-3.1-8B-Instruct-q4f16_1-MLC">Llama 3.1 8B Instruct — better quality (~4.5 GB)</option>
+        <option value="Hermes-3-Llama-3.1-8B-q4f16_1-MLC">Hermes 3 8B — strong instruction-following (~4.5 GB)</option>
+        <option value="Qwen2.5-7B-Instruct-q4f16_1-MLC">Qwen 2.5 7B Instruct (~4.0 GB)</option>
+      </select>
+      <div class="hint">Smaller models are faster but may struggle with strict JSON. The session screen will fall back to plain text if scoring fails.</div>
+    </div>
+    <div class="field">
+      <label>Local model status</label>
+      <div id="webllmStatus" style="font-size:13px; color:var(--muted); padding:8px 10px; background:var(--panel-2); border:1px solid var(--border); border-radius:8px;">Not loaded — will download when the session starts.</div>
+      <div id="webllmProgressWrap" class="hidden" style="margin-top:8px; height:8px; background:var(--panel-2); border:1px solid var(--border); border-radius:999px; overflow:hidden;">
+        <div id="webllmProgressFill" style="height:100%; width:0%; background:var(--accent); transition:width 0.2s;"></div>
+      </div>
+      <button id="btnPreloadWebLLM" type="button" class="secondary" style="margin-top:10px;">Preload model now</button>
+      <span id="gpuWarning" class="hint hidden" style="color:var(--danger); display:block; margin-top:6px;"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3. Begin</h2>
+    <div class="hint" style="margin-bottom:12px">
+      In group mode, the session code shown after start can be shared with anyone you want to invite. They open the same site, choose <b>Join</b>, and enter the code. The Professor scores each learner's answer; the Study Partner is Socratic-only.
+    </div>
+    <button id="btnStart" class="primary">Begin session</button>
+    <span id="startStatus" class="hint" style="margin-left:12px"></span>
+  </div>
+</section>
+
+<!-- =================== SESSION SCREEN =================== -->
+<section id="sessionScreen" class="session hidden">
+  <div class="session-bar">
+    <div>Mode: <b id="sessionModeLabel">Group</b></div>
+    <div>Code: <span id="sessionCodeInline" style="font-family:ui-monospace;font-weight:600"></span> <button id="btnCopyCode" class="secondary" style="padding:2px 8px; font-size:11px">copy</button></div>
+    <div class="participants" id="participantsBar"></div>
+  </div>
+  <div class="agents">
+    <div class="agent-pane professor-pane">
+      <div class="agent-header">
+        <div class="agent-dot"></div>
+        <div>
+          <div class="agent-name">The Professor</div>
+          <div class="agent-role">Interrogator · scores 1–10 · decides when you're done</div>
+        </div>
+      </div>
+      <div class="messages" id="professorMessages"></div>
+    </div>
+    <div class="agent-pane partner-pane">
+      <div class="agent-header">
+        <div class="agent-dot"></div>
+        <div>
+          <div class="agent-name">The Study Partner</div>
+          <div class="agent-role">Socratic helper · hints &amp; scaffolding · never gives the answer</div>
+        </div>
+      </div>
+      <div class="messages" id="partnerMessages"></div>
+    </div>
+  </div>
+
+  <div class="composer">
+    <div class="composer-row">
+      <select id="addressee">
+        <option value="professor">↳ Reply to the Professor</option>
+        <option value="partner">↳ Ask the Study Partner</option>
+      </select>
+      <textarea id="learnerInput" placeholder="Type your message…  (Enter to send · Shift+Enter for newline)"></textarea>
+      <button id="btnSend" class="primary send">Send</button>
+    </div>
+    <div class="composer-actions">
+      <span id="composerStatus" class="status"></span>
+      <div class="right-actions">
+        <button id="btnExportMd" class="secondary">Export .md</button>
+        <button id="btnExportJson" class="secondary">Export .json</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== TRANSCRIPT MODAL =================== -->
+<div id="transcriptModal" class="modal-back hidden">
+  <div class="modal">
+    <h3>Session transcript</h3>
+    <pre id="transcriptContent"></pre>
+    <div class="actions">
+      <button id="btnCopyTranscript" class="secondary">Copy to clipboard</button>
+      <button id="btnCloseTranscript" class="primary">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- =================== FINAL REPORT MODAL =================== -->
+<div id="reportModal" class="modal-back hidden">
+  <div class="modal">
+    <h3>Session complete</h3>
+    <div class="report-grid" style="margin-bottom:14px">
+      <div class="big-score" id="reportBigScore">–</div>
+      <div>
+        <div style="color:var(--muted); font-size:13px; margin-bottom:6px">Final assessment from the Professor</div>
+        <div id="reportFeedback" style="white-space:pre-wrap"></div>
+      </div>
+    </div>
+    <div class="scoreboard" id="reportScoreboard"></div>
+    <div class="actions">
+      <button id="btnReportExportMd" class="secondary">Export .md</button>
+      <button id="btnReportClose" class="primary">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
