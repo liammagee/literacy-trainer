@@ -1,0 +1,32 @@
+# Python
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+
+# Git
+.git
+.gitignore
+
+# Secrets / local env
+.env
+.env.*
+
+# Local SQLite + uploads
+data
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Editor + OS
+.DS_Store
+*.log
+.idea
+.vscode
+*.swp
+
+# Docs not needed at runtime
+README.md
