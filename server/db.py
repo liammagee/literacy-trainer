@@ -134,6 +134,24 @@ def get_session(session_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+def update_session_models(
+    session_id: str,
+    *,
+    professor_model: str | None = None,
+    partner_model: str | None = None,
+) -> None:
+    sets, args = [], []
+    if professor_model is not None:
+        sets.append("professor_model = ?"); args.append(professor_model)
+    if partner_model is not None:
+        sets.append("partner_model = ?"); args.append(partner_model)
+    if not sets:
+        return
+    args.append(session_id)
+    with cursor() as c:
+        c.execute(f"UPDATE sessions SET {', '.join(sets)} WHERE id = ?", args)
+
+
 def end_session(session_id: str, *, final_score: float | None, final_summary: str) -> None:
     with cursor() as c:
         c.execute(

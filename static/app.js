@@ -498,11 +498,12 @@ function enterSessionScreen(meta) {
   $('#sessionModeLabel').textContent = 'Group';
   $('#wsStatus').classList.remove('hidden');
 
-  // Show which model is powering each agent (visible in chat per the user's ask).
+  // Both agent badges are <select>s — populated once with allowedModels, value
+  // set per-session, change handler hits the live-update endpoint.
   const profM = meta?.professor_model || meta?.model || '';
   const partM = meta?.partner_model   || meta?.model || '';
-  $('#professorModelBadge').textContent = profM ? labelForModel(profM) : '';
-  $('#partnerModelBadge').textContent   = partM ? labelForModel(partM) : '';
+  populateLiveModelSelect('#professorModelBadge', profM, 'professor_model');
+  populateLiveModelSelect('#partnerModelBadge',   partM, 'partner_model');
 
   // Replay any messages already on the server (joiners arriving mid-session).
   if (meta && Array.isArray(meta.messages)) {
@@ -512,6 +513,45 @@ function enterSessionScreen(meta) {
   }
   connectWebSocket();
   history.replaceState(null, '', `${location.pathname}?s=${state.sessionId}`);
+}
+
+function populateLiveModelSelect(selector, currentValue, payloadKey) {
+  const sel = $(selector);
+  if (!sel) return;
+  sel.innerHTML = '';
+  const opts = state.allowedModels.length ? state.allowedModels : (currentValue ? [currentValue] : []);
+  for (const m of opts) {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = labelForModel(m);
+    sel.appendChild(opt);
+  }
+  if (currentValue && !opts.includes(currentValue)) {
+    // Solo (webllm) mode — model isn't in allowedModels; show it anyway, disabled.
+    const opt = document.createElement('option');
+    opt.value = currentValue;
+    opt.textContent = currentValue;
+    sel.appendChild(opt);
+  }
+  sel.value = currentValue || (opts[0] || '');
+  sel.disabled = state.mode !== 'server';   // can't hot-swap a WebLLM engine
+  sel.onchange = () => onLiveModelChange(payloadKey, sel.value);
+}
+
+async function onLiveModelChange(payloadKey, value) {
+  if (state.mode !== 'server' || !state.sessionId) return;
+  $('#composerStatus').textContent = `Switching ${payloadKey === 'professor_model' ? 'Professor' : 'Study Partner'} to ${labelForModel(value)}…`;
+  try {
+    const r = await fetch(`/api/sessions/${encodeURIComponent(state.sessionId)}/models`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ [payloadKey]: value }),
+    });
+    if (!r.ok) throw new Error((await r.text()).slice(0, 300));
+    // The server broadcasts a models_changed event back; that handler clears the status.
+  } catch (e) {
+    $('#composerStatus').textContent = 'Could not switch model: ' + e.message;
+  }
 }
 
 async function startWebllmSession() {
@@ -541,8 +581,8 @@ async function startWebllmSession() {
   $('#sessionModeLabel').textContent = 'Solo (offline)';
   $('#sessionCodeInline').textContent = '–';
   $('#wsStatus').classList.add('hidden');
-  $('#professorModelBadge').textContent = state.webllmModelId || '';
-  $('#partnerModelBadge').textContent   = state.webllmModelId || '';
+  populateLiveModelSelect('#professorModelBadge', state.webllmModelId || '', 'professor_model');
+  populateLiveModelSelect('#partnerModelBadge',   state.webllmModelId || '', 'partner_model');
 
   setBusy(true);
   $('#composerStatus').textContent = 'The Professor is preparing the first question…';
@@ -582,6 +622,13 @@ function handleWsEvent(ev) {
   } else if (ev.type === 'participant_joined') {
     if (!state.participants.includes(ev.learner_name)) state.participants.push(ev.learner_name);
     renderParticipants();
+  } else if (ev.type === 'models_changed') {
+    const profSel = $('#professorModelBadge');
+    const partSel = $('#partnerModelBadge');
+    if (ev.professor_model && profSel) profSel.value = ev.professor_model;
+    if (ev.partner_model   && partSel) partSel.value = ev.partner_model;
+    addNote('professor', `Model swap — Professor: ${labelForModel(ev.professor_model)} · Study Partner: ${labelForModel(ev.partner_model)}`);
+    $('#composerStatus').textContent = '';
   } else if (ev.type === 'session_ended') {
     state.done = true;
     showFinalReport({

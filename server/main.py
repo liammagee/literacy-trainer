@@ -149,6 +149,38 @@ async def post_message(sid: str, payload: dict = Body(...)) -> dict:
     return {"ok": True, "message_id": msg["id"]}
 
 
+@app.post("/api/sessions/{sid}/models")
+async def update_session_models(sid: str, payload: dict = Body(...)) -> dict:
+    """Swap the model powering The Professor and/or The Study Partner mid-session."""
+    sess = db.get_session(sid)
+    if not sess:
+        raise HTTPException(404, "session not found")
+    if sess.get("ended_at"):
+        raise HTTPException(409, "session has ended")
+
+    update: dict[str, str] = {}
+    for key in ("professor_model", "partner_model"):
+        v = payload.get(key)
+        if v is None:
+            continue
+        v = str(v).strip()
+        if v not in ALLOWED_MODELS:
+            raise HTTPException(400, f"{key} must be one of {sorted(ALLOWED_MODELS)}")
+        update[key] = v
+    if not update:
+        raise HTTPException(400, "supply professor_model and/or partner_model")
+
+    db.update_session_models(sid, **update)
+    new_sess = db.get_session(sid)
+    pm, tm = new_sess["professor_model"], new_sess["partner_model"]
+    await manager.broadcast(sid, {
+        "type": "models_changed",
+        "professor_model": pm,
+        "partner_model": tm,
+    })
+    return {"ok": True, "professor_model": pm, "partner_model": tm}
+
+
 @app.post("/api/sessions/{sid}/end")
 async def end_session(sid: str) -> dict:
     sess = db.get_session(sid)

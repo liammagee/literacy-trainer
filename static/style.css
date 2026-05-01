@@ -117,15 +117,26 @@ label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px
 .partner-pane .agent-dot { background: var(--partner); box-shadow: 0 0 0 3px rgba(95,199,168,0.18); }
 .agent-name { font-weight: 600; }
 .agent-role { color: var(--muted); font-size: 12.5px; }
-.agent-model {
+select.agent-model, .agent-model {
   margin-left: auto; align-self: center;
-  font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--muted);
   background: var(--panel); border: 1px solid var(--border);
-  padding: 4px 8px; border-radius: 999px;
+  padding: 4px 22px 4px 10px; border-radius: 999px;
   letter-spacing: 0.3px; white-space: nowrap;
+  width: auto; max-width: 240px; height: auto;
+  appearance: none; -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: right 10px top 50%, right 6px top 50%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+  cursor: pointer;
 }
-.agent-model:empty { display: none; }
+select.agent-model:hover { border-color: var(--accent); color: var(--text); }
+select.agent-model:focus { outline: none; border-color: var(--accent); }
+select.agent-model:disabled { cursor: default; opacity: 0.7; }
 .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .messages::-webkit-scrollbar { width: 10px; }
 .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
