@@ -144,12 +144,14 @@ function bindUI() {
     $$('.tab-panel').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
     document.querySelector(`.tab-panel[data-tab="${t.dataset.tab}"]`).classList.add('active');
+    if (t.dataset.tab === 'library') loadArticleLibrary();
   }));
 
   $('#pdfFile').addEventListener('change', onPdfUpload);
   $('#urlFetchBtn').addEventListener('click', onUrlFetch);
   $('#btnRefreshSessions').addEventListener('click', loadSessionBrowser);
   $('#showEnded').addEventListener('change', loadSessionBrowser);
+  $('#btnRefreshArticles').addEventListener('click', loadArticleLibrary);
   $('#btnStart').addEventListener('click', onStart);
   $('#btnEnd').addEventListener('click', onEnd);
   $('#btnSettings').addEventListener('click', onSettings);
@@ -249,6 +251,67 @@ function loadSessionBrowser() {
     .catch(e => {
       browser.innerHTML = `<div class="session-browser-empty">Couldn't load: ${e.message}</div>`;
     });
+}
+
+function loadArticleLibrary() {
+  const lib = $('#articleLibrary');
+  const countEl = $('#articleLibCount');
+  if (!lib) return;
+  lib.innerHTML = '<div class="session-browser-empty">Loading…</div>';
+  countEl.textContent = '';
+  $('#articleLibStatus').textContent = '';
+  fetch('/api/articles')
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then(rows => {
+      countEl.textContent = `(${rows.length})`;
+      if (rows.length === 0) {
+        lib.innerHTML = '<div class="session-browser-empty">No articles yet — paste, upload, or fetch one in the other tabs and it’ll appear here next time.</div>';
+        return;
+      }
+      lib.innerHTML = '';
+      rows.forEach(a => {
+        const row = document.createElement('div');
+        row.className = 'session-row';
+        const title = String(a.paper_title || 'Untitled')
+          .replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const ageMs = Date.now() - (a.last_used_at || 0);
+        const chars = (a.char_count || 0).toLocaleString();
+        const sN = a.session_count || 1;
+        row.innerHTML =
+          `<div class="title">${title}</div>` +
+          `<div class="code">${chars} chars</div>` +
+          `<div class="meta">` +
+            `<span>last used ${humanizeAge(ageMs)}</span>` +
+            `<span>${sN} ${sN === 1 ? 'session' : 'sessions'}</span>` +
+          `</div>`;
+        row.addEventListener('click', () => pickArticleFromLibrary(a, row));
+        lib.appendChild(row);
+      });
+    })
+    .catch(e => {
+      lib.innerHTML = `<div class="session-browser-empty">Couldn't load: ${e.message}</div>`;
+    });
+}
+
+async function pickArticleFromLibrary(a, row) {
+  $('#articleLibStatus').textContent = 'Loading article…';
+  try {
+    const r = await fetch(`/api/articles/by-session/${encodeURIComponent(a.latest_session_id)}`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    state.paperText = data.paper_text || '';
+    state.paperTitle = data.paper_title || a.paper_title || 'Untitled';
+    $('#pasteTitle').value = state.paperTitle;
+    $('#pasteText').value = state.paperText;
+    $$('#articleLibrary .session-row').forEach(r => r.classList.remove('selected'));
+    row.classList.add('selected');
+    // Switch to the Paste tab so the user can see/edit before starting.
+    $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'paste'));
+    $$('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tab === 'paste'));
+    $('#articleLibStatus').textContent = `Loaded "${state.paperTitle}" (${state.paperText.length.toLocaleString()} chars). Edit if needed, then Begin.`;
+  } catch (e) {
+    $('#articleLibStatus').textContent = 'Failed to load: ' + e.message;
+  }
 }
 
 function humanizeAge(ms) {

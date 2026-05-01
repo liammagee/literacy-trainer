@@ -205,6 +205,40 @@ def list_recent_sessions(limit: int = 50) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def list_distinct_articles() -> list[dict]:
+    """One row per distinct paper_title across all sessions, with usage stats
+    and the most-recent session id so clients can fetch the latest text body."""
+    with cursor() as c:
+        rows = c.execute(
+            """
+            WITH latest AS (
+              SELECT s.id, s.paper_title, s.created_at,
+                     LENGTH(s.paper_text) AS char_count,
+                     ROW_NUMBER() OVER (PARTITION BY s.paper_title ORDER BY s.created_at DESC) AS rn
+              FROM sessions s
+            )
+            SELECT l.paper_title,
+                   l.id          AS latest_session_id,
+                   l.created_at  AS last_used_at,
+                   l.char_count,
+                   (SELECT COUNT(*) FROM sessions s2 WHERE s2.paper_title = l.paper_title) AS session_count
+            FROM latest l
+            WHERE l.rn = 1
+            ORDER BY l.created_at DESC
+            """
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_article_by_session(session_id: str) -> dict | None:
+    with cursor() as c:
+        row = c.execute(
+            "SELECT paper_title, paper_text FROM sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def session_to_json(session_id: str) -> str:
     """Single-blob export for offline analysis."""
     sess = get_session(session_id)

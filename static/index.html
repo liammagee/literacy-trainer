@@ -87,6 +87,7 @@
       <button class="tab active" data-tab="paste">Paste text</button>
       <button class="tab" data-tab="pdf">PDF upload</button>
       <button class="tab" data-tab="url">From web URL</button>
+      <button class="tab" data-tab="library">From library</button>
     </div>
 
     <div class="tab-panel active" data-tab="paste">
@@ -116,6 +117,17 @@
       </div>
       <button id="urlFetchBtn" class="secondary">Fetch article</button>
       <div id="urlStatus" class="hint"></div>
+    </div>
+
+    <div class="tab-panel" data-tab="library">
+      <div class="field">
+        <label>Reuse an article from a previous session <span id="articleLibCount" class="hint" style="display:inline; margin-left:6px"></span></label>
+        <div id="articleLibrary" class="session-browser">
+          <div class="session-browser-empty">Loading…</div>
+        </div>
+        <button id="btnRefreshArticles" type="button" class="secondary" style="margin-top:8px">Refresh</button>
+        <div id="articleLibStatus" class="hint"></div>
+      </div>
     </div>
   </div>
 

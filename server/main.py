@@ -226,6 +226,20 @@ async def extract_pdf(file: UploadFile) -> dict:
     }
 
 
+@app.get("/api/articles")
+async def list_articles() -> list[dict]:
+    """Distinct articles previously uploaded — for the 'From library' picker."""
+    return db.list_distinct_articles()
+
+
+@app.get("/api/articles/by-session/{sid}")
+async def get_article_text(sid: str) -> dict:
+    art = db.get_article_by_session(sid)
+    if not art:
+        raise HTTPException(404, "session not found")
+    return art
+
+
 # --------------------------------------------------------------------- WebSocket
 
 @app.websocket("/ws/sessions/{sid}")
