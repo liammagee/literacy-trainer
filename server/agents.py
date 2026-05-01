@@ -176,7 +176,7 @@ async def run_professor(
     raw = await call_claude(
         system=system,
         user_message=user_msg,
-        model=sess["model"],
+        model=sess.get("professor_model") or sess["model"],
         max_tokens=1400,
         temperature=0.3,
     )
@@ -250,7 +250,7 @@ async def run_partner(session_id: str) -> dict:
     text = await call_claude(
         system=system,
         user_message=user_msg,
-        model=sess["model"],
+        model=sess.get("partner_model") or sess["model"],
         max_tokens=900,
         temperature=0.5,
     )

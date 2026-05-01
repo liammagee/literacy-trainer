@@ -78,9 +78,18 @@
     </div>
 
     <div class="field">
-      <label>Claude model</label>
-      <select id="model"></select>
-      <div class="hint">Model runs on the server using a single shared API key.</div>
+      <label>Claude models — pick one for each agent (they can differ)</label>
+      <div class="row" style="gap:10px">
+        <div>
+          <label style="font-size:12px; margin-bottom:4px">The Professor</label>
+          <select id="professorModel"></select>
+        </div>
+        <div>
+          <label style="font-size:12px; margin-bottom:4px">The Study Partner</label>
+          <select id="partnerModel"></select>
+        </div>
+      </div>
+      <div class="hint">Both run on the server with the shared API key. Mixing a stronger model on the Professor with a faster one on the Partner is a common setup.</div>
     </div>
 
     <div class="tabs">
@@ -181,6 +190,7 @@
           <div class="agent-name">The Professor</div>
           <div class="agent-role">Interrogator · scores 1–10 · decides when you're done</div>
         </div>
+        <div class="agent-model" id="professorModelBadge" title="Model powering The Professor"></div>
       </div>
       <div class="messages" id="professorMessages"></div>
     </div>
@@ -191,6 +201,7 @@
           <div class="agent-name">The Study Partner</div>
           <div class="agent-role">Socratic helper · hints &amp; scaffolding · never gives the answer</div>
         </div>
+        <div class="agent-model" id="partnerModelBadge" title="Model powering The Study Partner"></div>
       </div>
       <div class="messages" id="partnerMessages"></div>
     </div>

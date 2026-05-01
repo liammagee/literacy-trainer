@@ -24,7 +24,8 @@ const state = {
   paperTitle: '',
   paperText: '',
   learnerLevel: 'undergraduate',
-  model: 'claude-sonnet-4-6',
+  professorModel: 'claude-sonnet-4-6',
+  partnerModel: 'claude-sonnet-4-6',
   allowedModels: [],
   // ----- webllm-mode config -----
   webllmModelId: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
@@ -35,7 +36,9 @@ const state = {
 const LS = {
   NAME: 'lit-trainer.learnerName',
   LEVEL: 'lit-trainer.learnerLevel',
-  MODEL: 'lit-trainer.model',
+  PROF_MODEL: 'lit-trainer.professorModel',
+  PART_MODEL: 'lit-trainer.partnerModel',
+  MODEL_LEGACY: 'lit-trainer.model',         // pre-v1.1 single key — read once, then ignore
   WEBLLM: 'lit-trainer.webllmModel',
   MODE: 'lit-trainer.mode',
 };
@@ -65,7 +68,11 @@ function restoreSettings() {
   try {
     const n = localStorage.getItem(LS.NAME);     if (n) $('#learnerName').value = n;
     const l = localStorage.getItem(LS.LEVEL);    if (l) $('#learnerLevel').value = l;
-    const m = localStorage.getItem(LS.MODEL);    if (m) state.model = m;
+    const legacy = localStorage.getItem(LS.MODEL_LEGACY);
+    const pm = localStorage.getItem(LS.PROF_MODEL) || legacy;
+    const tm = localStorage.getItem(LS.PART_MODEL) || legacy;
+    if (pm) state.professorModel = pm;
+    if (tm) state.partnerModel = tm;
     const w = localStorage.getItem(LS.WEBLLM);
     if (w) { $('#webllmModel').value = w; state.webllmModelId = w; }
     const md = localStorage.getItem(LS.MODE);
@@ -79,18 +86,22 @@ async function loadServerConfig() {
     if (!r.ok) return;
     const cfg = await r.json();
     state.allowedModels = cfg.allowed_models || [];
-    const sel = $('#model');
-    sel.innerHTML = '';
-    for (const m of state.allowedModels) {
-      const opt = document.createElement('option');
-      opt.value = m;
-      opt.textContent = labelForModel(m);
-      sel.appendChild(opt);
-    }
-    sel.value = state.model && state.allowedModels.includes(state.model)
-      ? state.model
-      : (cfg.default_model || state.allowedModels[0] || '');
-    state.model = sel.value;
+    const fallback = cfg.default_model || state.allowedModels[0] || '';
+    const populate = (selId, current) => {
+      const sel = $(selId);
+      if (!sel) return current;
+      sel.innerHTML = '';
+      for (const m of state.allowedModels) {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = labelForModel(m);
+        sel.appendChild(opt);
+      }
+      sel.value = (current && state.allowedModels.includes(current)) ? current : fallback;
+      return sel.value;
+    };
+    state.professorModel = populate('#professorModel', state.professorModel);
+    state.partnerModel   = populate('#partnerModel',   state.partnerModel);
   } catch (e) {
     // Server config unavailable — server mode will fail loudly later.
   }
@@ -121,9 +132,13 @@ function bindUI() {
   $('#learnerLevel').addEventListener('change', () => {
     try { localStorage.setItem(LS.LEVEL, $('#learnerLevel').value); } catch (e) {}
   });
-  $('#model').addEventListener('change', () => {
-    state.model = $('#model').value;
-    try { localStorage.setItem(LS.MODEL, state.model); } catch (e) {}
+  $('#professorModel').addEventListener('change', () => {
+    state.professorModel = $('#professorModel').value;
+    try { localStorage.setItem(LS.PROF_MODEL, state.professorModel); } catch (e) {}
+  });
+  $('#partnerModel').addEventListener('change', () => {
+    state.partnerModel = $('#partnerModel').value;
+    try { localStorage.setItem(LS.PART_MODEL, state.partnerModel); } catch (e) {}
   });
   $('#webllmModel').addEventListener('change', () => {
     state.webllmModelId = $('#webllmModel').value;
@@ -430,7 +445,8 @@ async function startServerSession() {
         paper_title: state.paperTitle || 'Untitled article',
         paper_text: state.paperText,
         learner_level: state.learnerLevel,
-        model: state.model,
+        professor_model: state.professorModel,
+        partner_model: state.partnerModel,
         learner_name: state.learnerName,
       }),
     });
@@ -438,7 +454,7 @@ async function startServerSession() {
     const data = await r.json();
     state.sessionId = data.session_id;
     state.paperTitle = data.paper_title;
-    enterSessionScreen();
+    enterSessionScreen({ professor_model: data.professor_model, partner_model: data.partner_model });
   } catch (e) {
     $('#startStatus').textContent = 'Failed to create session: ' + e.message;
   }
@@ -482,6 +498,12 @@ function enterSessionScreen(meta) {
   $('#sessionModeLabel').textContent = 'Group';
   $('#wsStatus').classList.remove('hidden');
 
+  // Show which model is powering each agent (visible in chat per the user's ask).
+  const profM = meta?.professor_model || meta?.model || '';
+  const partM = meta?.partner_model   || meta?.model || '';
+  $('#professorModelBadge').textContent = profM ? labelForModel(profM) : '';
+  $('#partnerModelBadge').textContent   = partM ? labelForModel(partM) : '';
+
   // Replay any messages already on the server (joiners arriving mid-session).
   if (meta && Array.isArray(meta.messages)) {
     for (const m of meta.messages) ingestMessage(m);
@@ -519,6 +541,8 @@ async function startWebllmSession() {
   $('#sessionModeLabel').textContent = 'Solo (offline)';
   $('#sessionCodeInline').textContent = '–';
   $('#wsStatus').classList.add('hidden');
+  $('#professorModelBadge').textContent = state.webllmModelId || '';
+  $('#partnerModelBadge').textContent   = state.webllmModelId || '';
 
   setBusy(true);
   $('#composerStatus').textContent = 'The Professor is preparing the first question…';

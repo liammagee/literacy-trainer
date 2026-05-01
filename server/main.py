@@ -69,18 +69,23 @@ async def create_session(payload: dict = Body(...)) -> dict:
     paper_text = (payload.get("paper_text") or "").strip()
     learner_level = (payload.get("learner_level") or "undergraduate").strip()
     model = (payload.get("model") or DEFAULT_MODEL).strip()
+    professor_model = (payload.get("professor_model") or model).strip()
+    partner_model = (payload.get("partner_model") or model).strip()
     learner_name = (payload.get("learner_name") or "").strip() or "Learner"
 
     if len(paper_text) < 200:
         raise HTTPException(400, "paper_text must be at least ~200 characters")
-    if model not in ALLOWED_MODELS:
-        raise HTTPException(400, f"model must be one of {sorted(ALLOWED_MODELS)}")
+    for label, m in (("professor_model", professor_model), ("partner_model", partner_model)):
+        if m not in ALLOWED_MODELS:
+            raise HTTPException(400, f"{label} must be one of {sorted(ALLOWED_MODELS)}")
 
     sid = db.create_session(
         paper_title=paper_title,
         paper_text=paper_text,
         learner_level=learner_level,
         model=model,
+        professor_model=professor_model,
+        partner_model=partner_model,
     )
     db.add_participant(sid, learner_name)
 
@@ -88,7 +93,12 @@ async def create_session(payload: dict = Body(...)) -> dict:
     # response returns immediately. Clients pick the message up via WebSocket.
     asyncio.create_task(_run_and_broadcast(sid, "professor", first_turn=True))
 
-    return {"session_id": sid, "paper_title": paper_title, "model": model}
+    return {
+        "session_id": sid,
+        "paper_title": paper_title,
+        "professor_model": professor_model,
+        "partner_model": partner_model,
+    }
 
 
 @app.get("/api/sessions/{sid}")

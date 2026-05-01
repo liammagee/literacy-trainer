@@ -18,15 +18,17 @@ _CODE_LEN = 8
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
-  id            TEXT PRIMARY KEY,
-  paper_title   TEXT NOT NULL,
-  paper_text    TEXT NOT NULL,
-  learner_level TEXT NOT NULL,
-  model         TEXT NOT NULL,
-  created_at    INTEGER NOT NULL,
-  ended_at      INTEGER,
-  final_score   REAL,
-  final_summary TEXT
+  id              TEXT PRIMARY KEY,
+  paper_title     TEXT NOT NULL,
+  paper_text      TEXT NOT NULL,
+  learner_level   TEXT NOT NULL,
+  model           TEXT NOT NULL,           -- legacy default (used if a per-agent model is null)
+  professor_model TEXT,
+  partner_model   TEXT,
+  created_at      INTEGER NOT NULL,
+  ended_at        INTEGER,
+  final_score     REAL,
+  final_summary   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS participants (
@@ -85,6 +87,12 @@ def cursor():
 def init_db() -> None:
     with cursor() as c:
         c.executescript(SCHEMA)
+        # Add columns introduced after the initial deploy. Idempotent.
+        cols = {row["name"] for row in c.execute("PRAGMA table_info(sessions)").fetchall()}
+        if "professor_model" not in cols:
+            c.execute("ALTER TABLE sessions ADD COLUMN professor_model TEXT")
+        if "partner_model" not in cols:
+            c.execute("ALTER TABLE sessions ADD COLUMN partner_model TEXT")
 
 
 def new_session_id() -> str:
@@ -104,13 +112,18 @@ def create_session(
     paper_text: str,
     learner_level: str,
     model: str,
+    professor_model: str | None = None,
+    partner_model: str | None = None,
 ) -> str:
     sid = new_session_id()
     with cursor() as c:
         c.execute(
-            "INSERT INTO sessions (id, paper_title, paper_text, learner_level, model, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (sid, paper_title, paper_text, learner_level, model, int(time.time() * 1000)),
+            "INSERT INTO sessions (id, paper_title, paper_text, learner_level, model, "
+            "professor_model, partner_model, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (sid, paper_title, paper_text, learner_level, model,
+             professor_model or model, partner_model or model,
+             int(time.time() * 1000)),
         )
     return sid
 

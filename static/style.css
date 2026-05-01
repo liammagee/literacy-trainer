@@ -117,6 +117,15 @@ label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px
 .partner-pane .agent-dot { background: var(--partner); box-shadow: 0 0 0 3px rgba(95,199,168,0.18); }
 .agent-name { font-weight: 600; }
 .agent-role { color: var(--muted); font-size: 12.5px; }
+.agent-model {
+  margin-left: auto; align-self: center;
+  font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+  background: var(--panel); border: 1px solid var(--border);
+  padding: 4px 8px; border-radius: 999px;
+  letter-spacing: 0.3px; white-space: nowrap;
+}
+.agent-model:empty { display: none; }
 .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .messages::-webkit-scrollbar { width: 10px; }
 .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
