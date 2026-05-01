@@ -191,8 +191,15 @@ def list_messages(session_id: str) -> list[dict]:
 def list_recent_sessions(limit: int = 50) -> list[dict]:
     with cursor() as c:
         rows = c.execute(
-            "SELECT id, paper_title, learner_level, model, created_at, ended_at, final_score "
-            "FROM sessions ORDER BY created_at DESC LIMIT ?",
+            """
+            SELECT s.id, s.paper_title, s.learner_level, s.model,
+                   s.created_at, s.ended_at, s.final_score,
+                   (SELECT COUNT(*) FROM participants p WHERE p.session_id = s.id) AS participant_count,
+                   (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id) AS message_count
+            FROM sessions s
+            ORDER BY s.created_at DESC
+            LIMIT ?
+            """,
             (limit,),
         ).fetchall()
     return [dict(r) for r in rows]

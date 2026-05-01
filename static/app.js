@@ -148,6 +148,8 @@ function bindUI() {
 
   $('#pdfFile').addEventListener('change', onPdfUpload);
   $('#urlFetchBtn').addEventListener('click', onUrlFetch);
+  $('#btnRefreshSessions').addEventListener('click', loadSessionBrowser);
+  $('#showEnded').addEventListener('change', loadSessionBrowser);
   $('#btnStart').addEventListener('click', onStart);
   $('#btnEnd').addEventListener('click', onEnd);
   $('#btnSettings').addEventListener('click', onSettings);
@@ -188,6 +190,77 @@ function applyModeUI() {
   $('#serverConfigCard').classList.toggle('hidden', mode === 'join');
   $('#webllmConfigCard').classList.toggle('hidden', mode !== 'webllm');
   $('#btnStart').textContent = mode === 'join' ? 'Join session' : 'Begin session';
+  if (mode === 'join') loadSessionBrowser();
+}
+
+function loadSessionBrowser() {
+  const browser = $('#sessionBrowser');
+  const countEl = $('#sessionBrowserCount');
+  if (!browser) return;
+  browser.innerHTML = '<div class="session-browser-empty">Loading…</div>';
+  countEl.textContent = '';
+  fetch('/api/sessions')
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then(rows => {
+      const showEnded = $('#showEnded').checked;
+      const filtered = showEnded ? rows : rows.filter(r => !r.ended_at);
+      const endedCount = rows.length - rows.filter(r => !r.ended_at).length;
+      countEl.textContent = showEnded
+        ? `(${rows.length})`
+        : (endedCount > 0 ? `(${filtered.length} active · ${endedCount} ended hidden)` : `(${filtered.length})`);
+      if (filtered.length === 0) {
+        browser.innerHTML = '<div class="session-browser-empty">' +
+          (rows.length === 0
+            ? 'No sessions yet — ask the host to create one, or paste a code below.'
+            : 'No active sessions. Tick "show ended" to see closed ones.') +
+          '</div>';
+        return;
+      }
+      browser.innerHTML = '';
+      const currentCode = ($('#joinCode').value || '').trim().toUpperCase();
+      filtered.forEach(s => {
+        const row = document.createElement('div');
+        row.className = 'session-row' + (s.id === currentCode ? ' selected' : '');
+        const title = String(s.paper_title || 'Untitled')
+          .replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const ageMs = Date.now() - (s.created_at || 0);
+        const partN = s.participant_count || 0;
+        const msgN = s.message_count || 0;
+        const ended = s.ended_at ? '<span class="ended-pill">ended</span>' : '';
+        row.innerHTML =
+          `<div class="title">${title}</div>` +
+          `<div class="code">${s.id}</div>` +
+          `<div class="meta">` +
+            `<span>${humanizeAge(ageMs)}</span>` +
+            `<span>${partN} ${partN === 1 ? 'participant' : 'participants'}</span>` +
+            `<span>${msgN} ${msgN === 1 ? 'msg' : 'msgs'}</span>` +
+            `<span>${labelForModel(s.model)}</span>` +
+            ended +
+          `</div>`;
+        row.addEventListener('click', () => {
+          $('#joinCode').value = s.id;
+          $$('#sessionBrowser .session-row').forEach(r => r.classList.remove('selected'));
+          row.classList.add('selected');
+          $('#startStatus').textContent = '';
+        });
+        browser.appendChild(row);
+      });
+    })
+    .catch(e => {
+      browser.innerHTML = `<div class="session-browser-empty">Couldn't load: ${e.message}</div>`;
+    });
+}
+
+function humanizeAge(ms) {
+  if (!ms || ms < 0) return 'just now';
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
 }
 
 function checkWebGPU() {
